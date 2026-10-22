@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Quay Chủ Đề</title>
+<meta name="description" content="Bốc ngẫu nhiên chủ đề luyện nói theo mục tiêu — không lặp lại cho đến khi quay hết.">
+<style>
+/* ============================================================
+   Quay Chủ Đề — single-file topic spinner
+   Dark, warm, editorial look. No build step, no dependencies.
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Prata&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #100d0a;             /* warm near-black */
+  --bg-soft: #17130e;
+  --surface: #1d1812;
+  --surface-2: #272017;
+  --text: #f4eee3;
+  --muted: #9d9183;
+  --accent: #e8a33b;         /* spotlight amber */
+  --accent-strong: #f0b45c;
+  --accent-ink: #2a1f0c;
+  --border: #322a1f;
+  --radius: 12px;            /* blocks/cards max 12px */
+  --radius-btn: 10px;        /* buttons 10px */
+  --font-display: "Prata", "Times New Roman", Georgia, serif;
+  --font-body: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --speed: 0.25s;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(1000px 520px at 50% -12%, #241b10 0%, transparent 62%),
+    radial-gradient(760px 420px at 85% 110%, #1a140d 0%, transparent 60%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  display: flex; flex-direction: column;
+  min-height: 100dvh;
+  overflow-x: clip;
+}
+
+/* ---------- Header ---------- */
+header {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 14px 20px;
+}
+.brand { font-weight: 700; letter-spacing: 0.02em; font-size: 0.95rem; color: var(--muted); }
+.brand b { color: var(--text); }
+#reset-spun {
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  font: inherit; font-size: 0.78rem; padding: 7px 12px; border-radius: var(--radius-btn);
+  cursor: pointer; transition: color var(--speed), border-color var(--speed);
+  white-space: nowrap;
+}
+#reset-spun:hover { color: var(--text); border-color: var(--muted); }
+
+/* ---------- Main ---------- */
+main {
+  flex: 1;
+  width: min(860px, 100%);
+  margin: 0 auto;
+  padding: 10px 20px 28px;
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center;
+}
+h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(2rem, 5.4vw, 3rem);
+  margin: 14px 0 6px;
+  letter-spacing: 0.01em;
+}
+.tagline { color: var(--muted); margin: 0 0 22px; font-size: 0.95rem; }
+
+/* ---------- Goal pills ---------- */
+.goals {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+  margin-bottom: 8px;
+}
+.goal {
+  font: inherit; font-size: 0.84rem; font-weight: 600;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;            /* pill chips ≤48px tall: allowed */
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: all var(--speed);
+  white-space: nowrap;
+}
+.goal:hover { color: var(--text); border-color: var(--muted); transform: translateY(-1px); }
+.goal.is-active {
+  color: var(--accent-ink);
+  background: linear-gradient(180deg, var(--accent-strong), var(--accent));
+  border-color: transparent;
+  box-shadow: 0 6px 20px rgba(232, 163, 59, 0.28);
+}
+.goal small { font-weight: 500; opacity: 0.75; margin-left: 5px; }
+
+/* ---------- Stage ---------- */
+.stage {
+  flex: 1;
+  width: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 44vh;
+  padding: 18px 6px;
+}
+.stage-label {
+  font-size: 0.74rem; font-weight: 700; letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 16px;
+  opacity: 0; transform: translateY(6px);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+.topic {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(1.7rem, 5.8vw, 3.3rem);
+  line-height: 1.22;
+  max-width: 20ch;
+  margin: 0;
+  min-height: 1.2em;
+  overflow-wrap: break-word;
+}
+.stage.revealed .stage-label,
+.stage.is-spinning .stage-label { opacity: 1; transform: none; }
+.stage.is-spinning .topic { filter: blur(1.5px); opacity: 0.6; }
+.stage.revealed .topic { animation: pop 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes pop {
+  from { transform: scale(0.96); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+.empty-hint {
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 400;
+}
+.done-note {
+  margin-top: 14px; color: var(--muted); font-size: 0.9rem;
+  display: none;
+}
+.stage.all-done .done-note { display: block; }
+
+/* ---------- Action bar ---------- */
+.actions {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding-bottom: 6px;
+  width: 100%;
+}
+#spin-btn {
+  font: inherit; font-weight: 700; font-size: 1.05rem;
+  color: var(--accent-ink);
+  background: linear-gradient(180deg, var(--accent-strong), var(--accent));
+  border: none; border-radius: var(--radius-btn);
+  padding: 15px 44px;
+  cursor: pointer;
+  box-shadow: 0 10px 28px rgba(232, 163, 59, 0.3);
+  transition: transform var(--speed), box-shadow var(--speed), filter var(--speed);
+}
+#spin-btn:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(232, 163, 59, 0.38); }
+#spin-btn:active { transform: scale(0.98); }
+#spin-btn:disabled { filter: saturate(0.4) brightness(0.8); cursor: wait; transform: none; }
+.counter { color: var(--muted); font-size: 0.85rem; }
+.kbd-hint { color: var(--muted); font-size: 0.78rem; opacity: 0.8; }
+.kbd-hint kbd {
+  font-family: inherit; font-size: 0.72rem;
+  border: 1px solid var(--border); border-bottom-width: 2px;
+  border-radius: 6px; padding: 1px 7px; margin: 0 2px;
+  background: var(--surface);
+}
+
+/* ---------- Footer (data tools) ---------- */
+footer {
+  display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; justify-content: center;
+  padding: 12px 20px calc(16px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--bg-soft);
+}
+.linkish {
+  background: none; border: none; color: var(--muted);
+  font: inherit; font-size: 0.82rem; cursor: pointer;
+  padding: 6px 2px; text-decoration: none;
+  transition: color var(--speed);
+}
+.linkish:hover { color: var(--text); }
+.linkish.hidden { display: none; }
+#data-name { color: var(--muted); font-size: 0.82rem; }
+#data-name b { color: var(--text); font-weight: 600; }
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%);
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 11px 18px; font-size: 0.88rem;
+  max-width: min(92vw, 460px);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  white-space: pre-line; text-align: center;
+  animation: toast-in 0.3s ease;
+  z-index: 60;
+}
+.toast.out { opacity: 0; transition: opacity 0.4s ease; }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+
+/* ---------- Mobile ---------- */
+@media (max-width: 480px) {
+  main { padding: 6px 16px 20px; }
+  .stage { min-height: 38vh; }
+  #spin-btn { width: 100%; padding: 15px 20px; }
+  .kbd-hint { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="brand">🎯 <b>Quay Chủ Đề</b></span>
+  <button id="reset-spun" type="button" title="Xóa dấu các chủ đề đã quay">↺ Đặt lại đã quay</button>
+</header>
+
+<main>
+  <h1>Hôm nay nói gì?</h1>
+  <p class="tagline">Chọn mục tiêu rồi bấm quay — mỗi chủ đề chỉ xuất hiện một lần cho đến khi quay hết.</p>
+
+  <div class="goals" id="goals" role="tablist" aria-label="Mục tiêu luyện tập"></div>
+
+  <section class="stage" id="stage" aria-live="polite">
+    <span class="stage-label" id="stage-label">Chủ đề của bạn</span>
+    <h2 class="topic" id="topic"></h2>
+    <p class="done-note" id="done-note">🎉 Bạn đã quay hết chủ đề trong mục tiêu này.</p>
+  </section>
+
+  <div class="actions">
+    <button id="spin-btn" type="button">Quay</button>
+    <span class="counter" id="counter"></span>
+    <span class="kbd-hint">nhấn <kbd>space</kbd> để quay</span>
+  </div>
+</main>
+
+<footer>
+  <span id="data-name"></span>
+  <button class="linkish" id="load-btn" type="button">📂 Nạp bộ chủ đề khác (JSON)</button>
+  <button class="linkish hidden" id="default-btn" type="button">↩︎ Về bộ mặc định</button>
+  <input id="file-input" type="file" accept=".json,application/json" hidden>
+</footer>
+
+<script>
+'use strict';
+/* ============================================================
+   Data — embedded at build time from topics.json.
+   Schema: [ { group, topics: [ {title, ...} | "title" ] } ]
+   (extra fields like "skills"/"questions" are accepted and ignored,
+    so the same topics.json also works for the Weekly Speaking app)
+   ============================================================ */
+const EMBEDDED_DATA = [{"group":"Storytelling (Kể chuyện)","skills":["Kể chuyện có mở đầu – diễn biến – kết thúc.","Truyền tải cảm xúc và bài học."],"topics":[{"title":"Một thất bại giúp bạn trưởng thành.","questions":[]},{"title":"Một quyết định khó khăn nhất bạn từng đưa ra.","questions":[]},{"title":"Một sai lầm mà bây giờ bạn biết ơn.","questions":[]},{"title":"Một lời khuyên bạn nhớ mãi.","questions":[]},{"title":"Khoảnh khắc khiến bạn tự hào nhất.","questions":[]},{"title":"Một ngày làm thay đổi suy nghĩ của bạn.","questions":[]},{"title":"Một trải nghiệm đáng nhớ trong công việc.","questions":[]},{"title":"Một lần bạn vượt qua nỗi sợ.","questions":[]}]},{"group":"Impromptu Speaking (Nói ứng biến)","skills":["Suy nghĩ nhanh.","Trình bày mạch lạc.","Tự tin khi không chuẩn bị."],"topics":[{"title":"Nếu ngày mai được nghỉ làm 1 tháng?","questions":[]},{"title":"Nếu có 100 triệu để đầu tư?","questions":[]},{"title":"Nếu ngày mai được nghỉ làm 1 tháng?","questions":[]},{"title":"Nếu không có Internet trong 1 tuần?","questions":[]},{"title":"Nếu trở thành CEO công ty hiện tại?","questions":[]},{"title":"Nếu được đổi nghề?","questions":[]},{"title":"Nếu được gặp chính mình sau 10 năm?","questions":[]},{"title":"Nếu chỉ còn 24 giờ để sống?","questions":[]},{"title":"Nếu được mở một doanh nghiệp?","questions":[]},{"title":"Nếu được tổ chức một sự kiện cho 1.000 người?","questions":[]}]},{"group":"Pitching (Thuyết phục)","skills":["Trình bày giá trị.","Kêu gọi hành động.","Thuyết phục người nghe."],"topics":[{"title":"Thuyết phục mọi người tập thể dục.","questions":[]},{"title":"Thuyết phục mọi người học ngoại ngữ.","questions":[]},{"title":"Giới thiệu một ứng dụng hữu ích.","questions":[]},{"title":"Thuyết phục mọi người bắt đầu tiết kiệm.","questions":[]},{"title":"Thuyết phục công ty áp dụng một ý tưởng mới.","questions":[]},{"title":"Pitch bản thân như đi phỏng vấn.","questions":[]},{"title":"Giới thiệu quê hương của bạn.","questions":[]},{"title":"Thuyết phục mọi người tham gia hoạt động thiện nguyện.","questions":[]}]},{"group":"Debate (Tranh biện)","skills":["Trình bày quan điểm.","Phản biện.","Lập luận logic."],"topics":[{"title":"Tiền hay hạnh phúc quan trọng hơn?","questions":[]},{"title":"AI mang lại nhiều lợi ích hơn rủi ro?","questions":[]},{"title":"Có nên làm việc từ xa?","questions":[]},{"title":"Đại học còn cần thiết?","questions":[]},{"title":"Người hướng nội có thể trở thành lãnh đạo giỏi?","questions":[]},{"title":"Nên nhảy việc sau 2 năm?","questions":[]},{"title":"Thành công do nỗ lực hay may mắn?","questions":[]},{"title":"Kỷ luật quan trọng hơn động lực?","questions":[]},{"title":"Làm điều mình thích hay điều kiếm được nhiều tiền?","questions":[]}]},{"group":"Body Language (Ngôn ngữ cơ thể)","skills":["Sử dụng ánh mắt.","Biểu cảm.","Cử chỉ.","Tư thế."],"topics":[{"title":"Ấn tượng đầu tiên quan trọng đến mức nào?","questions":[]},{"title":"Một lần bạn hiểu sai người khác vì ngôn ngữ cơ thể.","questions":[]},{"title":"Vai trò của nụ cười trong giao tiếp.","questions":[]},{"title":"Giao tiếp bằng mắt khó hay dễ?","questions":[]},{"title":"Làm sao để thể hiện sự lắng nghe?","questions":[]},{"title":"Cử chỉ nào khiến bạn thấy chuyên nghiệp?","questions":[]},{"title":"Làm sao để tạo thiện cảm trong 30 giây đầu?","questions":[]}]}];
+
+const CONFIG = {
+  storagePrefix: 'qcd.v1.',
+  spinMs: 1300,          // shuffle duration (ease-out)
+  defaultName: 'Bộ mặc định',
+};
+
+/* ---------------- Utils ---------------- */
+const Utils = {
+  randInt(n) {
+    if (n <= 0) return 0;
+    if (window.crypto && crypto.getRandomValues) {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      return buf[0] % n;
+    }
+    return Math.floor(Math.random() * n);
+  },
+  escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  },
+  prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  },
+};
+
+/* ---------------- Storage (namespaced, fail-safe) ---------------- */
+const Storage = {
+  get(key, fallback = null) {
+    try {
+      const raw = localStorage.getItem(CONFIG.storagePrefix + key);
+      return raw === null ? fallback : JSON.parse(raw);
+    } catch (_) { return fallback; }
+  },
+  set(key, value) {
+    try { localStorage.setItem(CONFIG.storagePrefix + key, JSON.stringify(value)); } catch (_) {}
+  },
+  remove(key) {
+    try { localStorage.removeItem(CONFIG.storagePrefix + key); } catch (_) {}
+  },
+};
+
+/* ---------------- Data (normalize + validate) ---------------- */
+const Data = {
+  groups: [],   // [{ name, topics: [{id, title, groupName, groupIndex}] }]
+  topics: [],   // flat list
+  byId: new Map(),
+  sourceName: CONFIG.defaultName,
+
+  /** Validate raw JSON (same schema as topics.json) and normalize. Throws a friendly message on bad shape. */
+  normalize(raw) {
+    if (!Array.isArray(raw) || raw.length === 0) throw new Error('File phải là một mảng các nhóm mục tiêu.');
+    const groups = [];
+    const seen = new Set();
+    raw.forEach((g, gi) => {
+      if (!g || typeof g !== 'object' || typeof g.group !== 'string' || !g.group.trim()) {
+        throw new Error(`Nhóm thứ ${gi + 1} thiếu tên ("group").`);
+      }
+      const name = g.group.trim();
+      if (!Array.isArray(g.topics) || g.topics.length === 0) {
+        throw new Error(`Nhóm "${name}" không có chủ đề nào.`);
+      }
+      const topics = g.topics.map((t, ti) => {
+        const title = typeof t === 'string' ? t.trim()
+          : (t && typeof t.title === 'string' ? t.title.trim() : '');
+        if (!title) throw new Error(`Chủ đề thứ ${ti + 1} của nhóm "${name}" thiếu tiêu đề.`);
+        // Stable id; duplicate titles stay independent via a suffix.
+        let id = name + '::' + title;
+        let n = 2;
+        while (seen.has(id)) id = name + '::' + title + '::#' + (n++);
+        seen.add(id);
+        return { id, title, groupName: name, groupIndex: gi };
+      });
+      groups.push({ name, topics });
+    });
+    return groups;
+  },
+
+  apply(groups, sourceName) {
+    this.groups = groups;
+    this.topics = groups.flatMap((g) => g.topics);
+    this.byId = new Map(this.topics.map((t) => [t.id, t]));
+    this.sourceName = sourceName;
+  },
+
+  load() {
+    const custom = Storage.get('customData', null);
+    if (custom && custom.raw) {
+      try {
+        this.apply(this.normalize(custom.raw), custom.name || 'Bộ tùy chỉnh');
+        return;
+      } catch (_) { Storage.remove('customData'); /* corrupted -> fall back to default */ }
+    }
+    this.apply(this.normalize(EMBEDDED_DATA), CONFIG.defaultName);
+  },
+
+  usingCustom() { return this.sourceName !== CONFIG.defaultName; },
+};
+
+/* ---------------- State ---------------- */
+const State = {
+  spunIds: new Set(),   // topics already drawn (pruned to existing ids on load)
+  goal: '',             // '' = all goals, otherwise a group name
+
+  load() {
+    const s = Storage.get('spunIds', []);
+    const valid = new Set(Data.topics.map((t) => t.id));
+    this.spunIds = new Set((Array.isArray(s) ? s : []).filter((id) => valid.has(id)));
+    const g = Storage.get('goal', '');
+    this.goal = (g === '' || Data.groups.some((x) => x.name === g)) ? g : '';
+    this.save(); // persist the pruned/validated view
+  },
+  save() {
+    Storage.set('spunIds', [...this.spunIds]);
+    Storage.set('goal', this.goal);
+  },
+};
+
+/* ---------------- Spin engine ---------------- */
+const Spin = {
+  running: false,
+  current: null, // last drawn topic (not persisted: each visit starts on a clean stage)
+
+  scopeTopics() {
+    return State.goal
+      ? Data.topics.filter((t) => t.groupName === State.goal)
+      : Data.topics;
+  },
+  pool() {
+    return this.scopeTopics().filter((t) => !State.spunIds.has(t.id));
+  },
+
+  /** Reset the no-repeat marks of the CURRENT scope only (other goals keep their progress). */
+  resetScope() {
+    const scope = new Set(this.scopeTopics().map((t) => t.id));
+    State.spunIds = new Set([...State.spunIds].filter((id) => !scope.has(id)));
+    State.save();
+  },
+
+  async run(opts = {}) {
+    if (this.running || Data.topics.length === 0) return;
+
+    let pool = this.pool();
+    let restarted = false;
+    if (pool.length === 0) {           // exhausted -> start a fresh round in this scope, then draw
+      this.resetScope();
+      pool = this.pool();
+      restarted = true;
+    }
+
+    const chosen = pool[Utils.randInt(pool.length)];
+    State.spunIds.add(chosen.id);
+    this.current = chosen;
+    State.save();
+
+    this.running = true;
+    UI.setSpinning(true);
+    if (!opts.instant && !Utils.prefersReducedMotion()) {
+      await this.animate(pool);
+    }
+    UI.setSpinning(false);
+    this.running = false;
+
+    UI.reveal(chosen, { restarted });
+    UI.renderAll();
+  },
+
+  /** Slot-machine shuffle across the current pool, decelerating (ease-out). */
+  animate(pool) {
+    return new Promise((resolve) => {
+      const start = Date.now();
+      const step = () => {
+        const elapsed = Date.now() - start;
+        if (elapsed >= CONFIG.spinMs) { resolve(); return; }
+        UI.setShuffleFrame(pool);
+        const p = elapsed / CONFIG.spinMs;
+        setTimeout(step, 50 + p * p * 240);
+      };
+      step();
+    });
+  },
+};
+
+/* ---------------- UI ---------------- */
+const UI = {
+  els: {},
+  cache() {
+    ['goals', 'stage', 'stage-label', 'topic', 'done-note',
+     'spin-btn', 'counter', 'reset-spun', 'load-btn', 'default-btn', 'file-input', 'data-name']
+      .forEach((id) => { this.els[id] = document.getElementById(id); });
+  },
+
+  showEmpty() {
+    Spin.current = null;
+    this.els['topic'].innerHTML = '<span class="empty-hint">bấm “Quay” để bốc một chủ đề 👇</span>';
+    this.els['stage'].classList.remove('revealed', 'is-spinning', 'all-done');
+  },
+
+  renderGoals() {
+    const all = Data.topics.length;
+    const allLeft = Data.topics.filter((t) => !State.spunIds.has(t.id)).length;
+    const pills = [
+      { key: '', label: '✨ Tất cả', left: allLeft, total: all },
+      ...Data.groups.map((g) => {
+        const left = g.topics.filter((t) => !State.spunIds.has(t.id)).length;
+        return { key: g.name, label: g.name, left, total: g.topics.length };
+      }),
+    ];
+    this.els['goals'].innerHTML = pills.map((p) => `
+      <button class="goal ${State.goal === p.key ? 'is-active' : ''}" type="button"
+              role="tab" aria-selected="${State.goal === p.key}"
+              data-goal="${Utils.escapeHtml(p.key)}">
+        ${Utils.escapeHtml(p.label)}<small>${p.left}/${p.total}</small>
+      </button>`).join('');
+  },
+
+  renderCounter() {
+    const left = Spin.pool().length;
+    const total = Spin.scopeTopics().length;
+    this.els['counter'].textContent = left === 0
+      ? `Đã quay hết ${total} chủ đề — bấm để bắt đầu vòng mới`
+      : `Còn ${left}/${total} chủ đề chưa quay`;
+    this.els['spin-btn'].textContent = left === 0 ? 'Quay lại từ đầu' : (Spin.current ? 'Quay tiếp' : 'Quay');
+  },
+
+  renderDataName() {
+    this.els['data-name'].innerHTML = `Bộ chủ đề: <b>${Utils.escapeHtml(Data.sourceName)}</b>`;
+    this.els['default-btn'].classList.toggle('hidden', !Data.usingCustom());
+  },
+
+  renderAll() {
+    this.renderGoals();
+    this.renderCounter();
+    this.renderDataName();
+  },
+
+  setSpinning(on) {
+    const stage = this.els['stage'];
+    stage.classList.toggle('is-spinning', on);
+    stage.classList.remove('all-done');
+    this.els['spin-btn'].disabled = on;
+    if (on) {
+      stage.classList.remove('revealed');
+      this.els['topic'].textContent = '…';
+    }
+  },
+
+  setShuffleFrame(pool) {
+    const list = pool && pool.length ? pool : Data.topics;
+    const t = list[Utils.randInt(list.length)];
+    this.els['topic'].textContent = t.title;
+    this.els['stage-label'].textContent = t.groupName;
+  },
+
+  reveal(topic, { restarted } = {}) {
+    const stage = this.els['stage'];
+    this.els['topic'].textContent = topic.title;
+    this.els['stage-label'].textContent = topic.groupName;
+    stage.classList.remove('revealed');
+    void stage.offsetWidth; // restart the pop animation
+    stage.classList.add('revealed');
+    if (restarted) this.toast('🔁 Đã quay hết lượt trước — bắt đầu vòng mới trong mục tiêu này!');
+  },
+
+  /** Shown when the current scope has no topics left to draw (on load / goal switch). */
+  showExhaustedNote() {
+    this.els['stage'].classList.add('all-done');
+  },
+
+  toast(msg, ms = 2400) {
+    const prev = document.querySelector('.toast');
+    if (prev) prev.remove();
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => el.classList.add('out'), ms);
+    setTimeout(() => el.remove(), ms + 450);
+  },
+};
+
+/* ---------------- App ---------------- */
+const App = {
+  init() {
+    UI.cache();
+    Data.load();
+    State.load();
+    UI.showEmpty();
+    UI.renderAll();
+    if (Spin.pool().length === 0) UI.showExhaustedNote();
+    this.wire();
+  },
+
+  wire() {
+    UI.els['spin-btn'].addEventListener('click', () => Spin.run());
+
+    // Goal pills: switching the goal clears the stage, never the progress.
+    UI.els['goals'].addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-goal]');
+      if (!btn || Spin.running) return;
+      State.goal = btn.dataset.goal;
+      State.save();
+      UI.showEmpty();
+      UI.renderAll();
+      if (Spin.pool().length === 0) UI.showExhaustedNote();
+    });
+
+    UI.els['reset-spun'].addEventListener('click', () => {
+      if (State.spunIds.size === 0) { UI.toast('Chưa có chủ đề nào được đánh dấu đã quay.'); return; }
+      const ok = window.confirm('Đặt lại toàn bộ dấu "đã quay"?\nMọi chủ đề sẽ có thể xuất hiện lại từ đầu.');
+      if (!ok) return;
+      State.spunIds.clear();
+      State.save();
+      UI.showEmpty();
+      UI.renderAll();
+      UI.toast('↺ Đã đặt lại — tất cả chủ đề sẵn sàng quay lại.');
+    });
+
+    UI.els['load-btn'].addEventListener('click', () => UI.els['file-input'].click());
+    UI.els['file-input'].addEventListener('change', () => {
+      const f = UI.els['file-input'].files[0];
+      UI.els['file-input'].value = '';
+      this.importFile(f);
+    });
+
+    UI.els['default-btn'].addEventListener('click', () => {
+      Storage.remove('customData');
+      Data.apply(Data.normalize(EMBEDDED_DATA), CONFIG.defaultName);
+      State.load(); // prune spun ids against the default set
+      UI.showEmpty();
+      UI.renderAll();
+      if (Spin.pool().length === 0) UI.showExhaustedNote();
+      UI.toast('↩︎ Đã quay về bộ chủ đề mặc định.');
+    });
+
+    // Space = spin (ignored while typing in a focused control).
+    document.addEventListener('keydown', (ev) => {
+      if (ev.code === 'Space' && !ev.repeat && ev.target === document.body) {
+        ev.preventDefault();
+        Spin.run();
+      }
+    });
+  },
+
+  async importFile(file) {
+    if (!file) return;
+    try {
+      const raw = JSON.parse(await file.text());
+      const groups = Data.normalize(raw); // throws with a friendly message on bad shape
+      Data.apply(groups, file.name.replace(/\.json$/i, ''));
+      Storage.set('customData', { name: Data.sourceName, raw });
+      State.load(); // prune spun ids + goal against the new set; surviving progress is kept
+      UI.showEmpty();
+      UI.renderAll();
+      if (Spin.pool().length === 0) UI.showExhaustedNote();
+      UI.toast(`✅ Đã nạp "${Data.sourceName}": ${Data.groups.length} mục tiêu · ${Data.topics.length} chủ đề.`);
+    } catch (e) {
+      const detail = e && e.message ? e.message : 'Không đọc được file.';
+      UI.toast(`❌ File không hợp lệ — giữ nguyên bộ chủ đề hiện tại.\n${detail}`, 3600);
+    }
+  },
+};
+
+/* Internal debug/test handle (not a public API). */
+window.__QCD__ = { CONFIG, Utils, Storage, Data, State, Spin, UI, App };
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => App.init());
+} else {
+  App.init();
+}
+</script>
+</body>
+</html>
