@@ -60,6 +60,77 @@ header {
   white-space: nowrap;
 }
 #reset-spun:hover { color: var(--text); border-color: var(--muted); }
+.head-actions { display: flex; gap: 8px; align-items: center; }
+#open-chosen {
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  font: inherit; font-size: 0.78rem; font-weight: 600; padding: 7px 12px; border-radius: var(--radius-btn);
+  cursor: pointer; white-space: nowrap; transition: border-color var(--speed);
+}
+#open-chosen:hover { border-color: var(--accent); }
+#open-chosen b { color: var(--accent); }
+
+/* ---------- Choose button (on the stage) ---------- */
+.choose-btn {
+  margin-top: 18px;
+  font: inherit; font-size: 0.9rem; font-weight: 600;
+  color: var(--text); background: var(--surface);
+  border: 1px solid var(--accent); border-radius: var(--radius-btn);
+  padding: 10px 20px; cursor: pointer;
+  transition: background var(--speed), color var(--speed);
+}
+.choose-btn:hover { background: var(--surface-2); }
+.choose-btn.is-chosen { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
+.choose-btn[hidden] { display: none; }
+
+/* ---------- Topic sheet (chosen list + search) ---------- */
+.sheet { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.sheet[hidden] { display: none; }
+.sheet-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.62); }
+.sheet-panel {
+  position: relative; width: min(640px, 100%); max-height: min(86dvh, 760px);
+  display: flex; flex-direction: column; gap: 12px;
+  background: var(--bg-soft); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); text-align: left;
+}
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sheet-head h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 1.35rem; }
+.icon-btn {
+  background: none; border: 1px solid var(--border); color: var(--muted); font: inherit;
+  width: 36px; height: 36px; border-radius: var(--radius-btn); cursor: pointer;
+}
+.icon-btn:hover { color: var(--text); }
+.tabs { display: flex; gap: 8px; }
+.tab {
+  font: inherit; font-size: 0.84rem; font-weight: 600; color: var(--muted);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+  padding: 8px 14px; cursor: pointer;
+}
+.tab.is-active { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
+#topic-search {
+  font: inherit; font-size: 0.95rem; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-btn);
+  padding: 11px 14px; width: 100%; outline: none;
+}
+#topic-search:focus { border-color: var(--accent); }
+.topic-list { list-style: none; margin: 0; padding: 0 2px 0 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; min-height: 80px; }
+.topic-item {
+  display: flex; gap: 12px; align-items: center;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 12px;
+}
+.topic-item.is-chosen { border-color: rgba(232, 163, 59, 0.55); }
+.ti-body { flex: 1; min-width: 0; }
+.ti-meta { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); margin-bottom: 3px; }
+.ti-title { font-size: 0.9rem; line-height: 1.45; overflow-wrap: break-word; }
+.ti-btn {
+  flex: none; font: inherit; font-size: 0.78rem; font-weight: 600;
+  color: var(--text); background: none; border: 1px solid var(--border); border-radius: var(--radius-btn);
+  padding: 7px 10px; cursor: pointer; white-space: nowrap;
+}
+.ti-btn:hover { border-color: var(--accent); }
+.ti-btn.primary { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
+.list-empty { color: var(--muted); font-size: 0.9rem; text-align: center; padding: 22px 8px; }
+body.sheet-open { overflow: hidden; }
 
 /* ---------- Main ---------- */
 main {
@@ -222,12 +293,22 @@ footer {
   .kbd-hint { display: none; }
   .round { font-size: 0.7rem; line-height: 1.5; padding-bottom: 4px; }
   .actions { gap: 6px; }
+  header { padding: 12px 16px; }
+  .brand { font-size: 0.85rem; }
+  #reset-spun, #open-chosen { padding: 7px 9px; font-size: 0.74rem; }
+  .sheet { padding: 0; align-items: flex-end; }
+  .sheet-panel { max-height: 92dvh; border-radius: var(--radius) var(--radius) 0 0; padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); }
+  .topic-item { flex-wrap: wrap; }
+  .ti-btn { margin-left: auto; }
 }
+@media (max-width: 360px) { .brand b { display: none; } }
 
 @media (max-width: 480px) and (max-height: 720px) {
   h1 { font-size: 1.7rem; margin: 4px 0 4px; }
   .tagline { display: none; }
   .goal { padding: 7px 13px; }
+  .choose-btn { margin-top: 12px; padding: 8px 16px; font-size: 0.85rem; }
+  .stage-label { margin-bottom: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -239,7 +320,10 @@ footer {
 
 <header>
   <span class="brand">🎯 <b>Quay Chủ Đề</b></span>
-  <button id="reset-spun" type="button" title="Xóa dấu các chủ đề đã quay">↺ Đặt lại đã quay</button>
+  <div class="head-actions">
+    <button id="open-chosen" type="button" title="Xem và tìm chủ đề đã chọn">☑ Đã chọn <b id="chosen-badge">0</b></button>
+    <button id="reset-spun" type="button" title="Đặt lại các chủ đề đã quay (giữ nguyên chủ đề đã chọn)">↺ Đặt lại đã quay</button>
+  </div>
 </header>
 
 <main>
@@ -251,6 +335,7 @@ footer {
   <section class="stage" id="stage" aria-live="polite">
     <span class="stage-label" id="stage-label">Chủ đề của bạn</span>
     <h2 class="topic" id="topic"></h2>
+    <button class="choose-btn" id="choose-btn" type="button" hidden>✓ Chọn chủ đề này</button>
     <p class="done-note" id="done-note">🎉 Bạn đã quay hết chủ đề trong mục tiêu này.</p>
   </section>
 
@@ -268,6 +353,22 @@ footer {
   <button class="linkish hidden" id="default-btn" type="button">↩︎ Về bộ mặc định</button>
   <input id="file-input" type="file" accept=".json,application/json" hidden>
 </footer>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-backdrop" data-close></div>
+  <section class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <div class="sheet-head">
+      <h3 id="sheet-title">Chủ đề</h3>
+      <button class="icon-btn" type="button" data-close aria-label="Đóng">✕</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab is-active" type="button" data-tab="chosen">✓ Đã chọn (<span id="chosen-count">0</span>)</button>
+      <button class="tab" type="button" data-tab="all">Tất cả chủ đề</button>
+    </div>
+    <input id="topic-search" type="search" placeholder="🔍 Tìm chủ đề…" autocomplete="off">
+    <ul class="topic-list" id="topic-list"></ul>
+  </section>
+</div>
 
 <script>
 'use strict';
@@ -301,6 +402,10 @@ const Utils = {
     return String(s).replace(/[&<>"']/g, (c) => (
       { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
     ));
+  },
+  /** Lowercase + strip Vietnamese diacritics, for accent-insensitive search. */
+  fold(s) {
+    return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase();
   },
   prefersReducedMotion() {
     return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -387,6 +492,9 @@ const State = {
   goal: '',             // '' = all goals, otherwise a group name
   round: [],            // groups already drawn in the current rotation round ("Tất cả" mode)
   recent: [],           // last draws [{ group, theme }] — used to space out similar content
+  chosen: [],           // [{ id, at }] topics the user ticked — never drawn again until un-ticked.
+                        // Kept for every topic set (not pruned), so switching sets loses nothing.
+  chosenSet: new Set(),
 
   load() {
     const s = Storage.get('spunIds', []);
@@ -402,6 +510,11 @@ const State = {
       .filter((x) => x && names.has(x.group))
       .map((x) => ({ group: x.group, theme: typeof x.theme === 'string' ? x.theme : '' }))
       .slice(-CONFIG.themeGap);
+    const ch = Storage.get('chosen', []);
+    this.chosen = (Array.isArray(ch) ? ch : [])
+      .filter((x) => x && typeof x.id === 'string')
+      .map((x) => ({ id: x.id, at: Number(x.at) || 0 }));
+    this.chosenSet = new Set(this.chosen.map((x) => x.id));
     this.save(); // persist the pruned/validated view
   },
   save() {
@@ -409,6 +522,21 @@ const State = {
     Storage.set('goal', this.goal);
     Storage.set('round', this.round);
     Storage.set('recent', this.recent);
+    Storage.set('chosen', this.chosen);
+  },
+  isChosen(id) { return this.chosenSet.has(id); },
+  choose(id) {
+    if (this.chosenSet.has(id)) return;
+    this.chosen.push({ id, at: Date.now() });
+    this.chosenSet.add(id);
+    this.save();
+  },
+  /** Un-tick: the topic goes straight back into the spinnable pool. */
+  unchoose(id) {
+    this.chosen = this.chosen.filter((x) => x.id !== id);
+    this.chosenSet.delete(id);
+    this.spunIds.delete(id);
+    this.save();
   },
   clearRotation() {
     this.round = [];
@@ -421,10 +549,15 @@ const Spin = {
   running: false,
   current: null, // last drawn topic (not persisted: each visit starts on a clean stage)
 
+  /** Topics that can still be drawn at all (chosen ones are out for good). */
+  activeTopics() {
+    return Data.topics.filter((t) => !State.isChosen(t.id));
+  },
+  activeOfGroup(name) {
+    return Data.topics.filter((t) => t.groupName === name && !State.isChosen(t.id));
+  },
   scopeTopics() {
-    return State.goal
-      ? Data.topics.filter((t) => t.groupName === State.goal)
-      : Data.topics;
+    return State.goal ? this.activeOfGroup(State.goal) : this.activeTopics();
   },
   pool() {
     return this.scopeTopics().filter((t) => !State.spunIds.has(t.id));
@@ -449,10 +582,11 @@ const Spin = {
     let restartedGroup = null;
     if (!State.goal) {
       // All groups always take part; a group that ran out simply starts its own list again.
-      const all = Data.groups.map((g) => g.name);
+      // Groups whose topics were all chosen drop out of the rotation.
+      const all = Data.groups.map((g) => g.name).filter((g) => this.activeOfGroup(g).length);
       const groupTopics = (g) => {
         const left = pool.filter((t) => t.groupName === g);
-        return left.length ? left : Data.topics.filter((t) => t.groupName === g);
+        return left.length ? left : this.activeOfGroup(g);
       };
       let eligible = all.filter((g) => !State.round.includes(g));
       if (!eligible.length) {
@@ -489,7 +623,7 @@ const Spin = {
       if (!groupPool.length) {                 // this group is used up -> restart just this group
         const ids = new Set(Data.topics.filter((t) => t.groupName === group).map((t) => t.id));
         State.spunIds = new Set([...State.spunIds].filter((id) => !ids.has(id)));
-        groupPool = Data.topics.filter((t) => t.groupName === group);
+        groupPool = this.activeOfGroup(group);
         if (safe.length) {
           const allowed = new Set(okThemes[group]);
           const narrowed = groupPool.filter((t) => allowed.has(t.theme));
@@ -515,6 +649,10 @@ const Spin = {
 
   async run(opts = {}) {
     if (this.running || Data.topics.length === 0) return;
+    if (this.scopeTopics().length === 0) {
+      UI.toast('Tất cả chủ đề ở mục này đã được chọn.\nBỏ chọn bớt trong “☑ Đã chọn” để quay tiếp.', 3200);
+      return;
+    }
 
     let pool = this.pool();
     let restarted = false;
@@ -566,7 +704,8 @@ const UI = {
   els: {},
   cache() {
     ['goals', 'stage', 'stage-label', 'topic', 'done-note',
-     'spin-btn', 'counter', 'round', 'reset-spun', 'load-btn', 'default-btn', 'file-input', 'data-name']
+     'spin-btn', 'counter', 'round', 'reset-spun', 'load-btn', 'default-btn', 'file-input', 'data-name',
+     'choose-btn', 'open-chosen', 'chosen-badge', 'sheet', 'topic-search', 'topic-list', 'chosen-count']
       .forEach((id) => { this.els[id] = document.getElementById(id); });
   },
 
@@ -575,16 +714,30 @@ const UI = {
     this.els['topic'].innerHTML = '<span class="empty-hint">bấm “Quay” để bốc một chủ đề 👇</span>';
     this.els['topic'].classList.remove('is-long', 'is-xlong');
     this.els['stage'].classList.remove('revealed', 'is-spinning', 'all-done');
+    this.renderChooseBtn();
+  },
+
+  /** The tick button under the drawn topic. */
+  renderChooseBtn() {
+    const btn = this.els['choose-btn'];
+    const t = Spin.current;
+    btn.hidden = !t || Spin.running;
+    if (!t) return;
+    const on = State.isChosen(t.id);
+    btn.classList.toggle('is-chosen', on);
+    btn.textContent = on ? '✓ Đã chọn — bấm để bỏ chọn' : '✓ Chọn chủ đề này';
   },
 
   renderGoals() {
-    const all = Data.topics.length;
-    const allLeft = Data.topics.filter((t) => !State.spunIds.has(t.id)).length;
+    const active = Spin.activeTopics();
+    const all = active.length;
+    const allLeft = active.filter((t) => !State.spunIds.has(t.id)).length;
     const pills = [
       { key: '', label: '✨ Tất cả', left: allLeft, total: all },
       ...Data.groups.map((g) => {
-        const left = g.topics.filter((t) => !State.spunIds.has(t.id)).length;
-        return { key: g.name, label: g.name, left, total: g.topics.length };
+        const ts = g.topics.filter((t) => !State.isChosen(t.id));
+        const left = ts.filter((t) => !State.spunIds.has(t.id)).length;
+        return { key: g.name, label: g.name, left, total: ts.length };
       }),
     ];
     this.els['goals'].innerHTML = pills.map((p) => `
@@ -610,7 +763,9 @@ const UI = {
   renderCounter() {
     const left = Spin.pool().length;
     const total = Spin.scopeTopics().length;
-    this.els['counter'].textContent = left === 0
+    this.els['counter'].textContent = total === 0
+      ? 'Tất cả chủ đề ở mục này đã được chọn'
+      : left === 0
       ? `Đã quay hết ${total} chủ đề — bấm để bắt đầu vòng mới`
       : `Còn ${left}/${total} chủ đề chưa quay`;
     this.els['spin-btn'].textContent = left === 0 ? 'Quay lại từ đầu' : (Spin.current ? 'Quay tiếp' : 'Quay');
@@ -621,7 +776,65 @@ const UI = {
     this.els['default-btn'].classList.toggle('hidden', !Data.usingCustom());
   },
 
+  chosenTopics() {
+    return State.chosen.map((x) => ({ ...x, topic: Data.byId.get(x.id) })).filter((x) => x.topic);
+  },
+
+  renderChosenBadge() {
+    const n = this.chosenTopics().length;
+    this.els['chosen-badge'].textContent = n;
+    this.els['chosen-count'].textContent = n;
+  },
+
+  /* ----- Sheet: chosen list + search across all topics ----- */
+  sheetTab: 'chosen',
+  openSheet(tab = 'chosen') {
+    this.sheetTab = tab;
+    this.els['sheet'].hidden = false;
+    document.body.classList.add('sheet-open');
+    this.els['topic-search'].value = '';
+    this.renderSheet();
+  },
+  closeSheet() {
+    this.els['sheet'].hidden = true;
+    document.body.classList.remove('sheet-open');
+  },
+  sheetOpen() { return !this.els['sheet'].hidden; },
+
+  renderSheet() {
+    if (!this.sheetOpen()) return;
+    document.querySelectorAll('#sheet .tab').forEach((b) => b.classList.toggle('is-active', b.dataset.tab === this.sheetTab));
+    const q = Utils.fold(this.els['topic-search'].value.trim());
+    const match = (t) => !q || Utils.fold(`${t.title} ${t.groupName} ${t.theme}`).includes(q);
+    const fmt = (ms) => { if (!ms) return ''; const d = new Date(ms); return ` · ${d.getDate()}/${d.getMonth() + 1}`; };
+    let rows;
+    if (this.sheetTab === 'chosen') {
+      rows = this.chosenTopics().reverse()           // newest first
+        .filter((x) => match(x.topic))
+        .map((x) => this.topicRow(x.topic, fmt(x.at)));
+    } else {
+      rows = Data.topics.filter(match).map((t) => this.topicRow(t, ''));
+    }
+    const empty = this.sheetTab === 'chosen' && !this.chosenTopics().length
+      ? 'Chưa chọn chủ đề nào. Quay ra chủ đề ưng ý thì bấm “✓ Chọn chủ đề này”.'
+      : 'Không tìm thấy chủ đề phù hợp.';
+    this.els['topic-list'].innerHTML = rows.length ? rows.join('') : `<li class="list-empty">${empty}</li>`;
+  },
+
+  topicRow(t, extra) {
+    const on = State.isChosen(t.id);
+    const meta = (t.theme ? `${t.groupName} · ${t.theme}` : t.groupName) + extra;
+    return `<li class="topic-item ${on ? 'is-chosen' : ''}">
+      <div class="ti-body"><div class="ti-meta">${Utils.escapeHtml(meta)}</div>
+      <div class="ti-title">${Utils.escapeHtml(t.title)}</div></div>
+      <button class="ti-btn ${on ? '' : 'primary'}" type="button" data-id="${Utils.escapeHtml(t.id)}">${on ? 'Bỏ chọn' : '✓ Chọn'}</button>
+    </li>`;
+  },
+
   renderAll() {
+    this.renderChosenBadge();
+    this.renderChooseBtn();
+    this.renderSheet();
     this.renderGoals();
     this.renderCounter();
     this.renderRound();
@@ -633,6 +846,7 @@ const UI = {
     stage.classList.toggle('is-spinning', on);
     stage.classList.remove('all-done');
     this.els['spin-btn'].disabled = on;
+    if (on) this.els['choose-btn'].hidden = true;
     if (on) {
       stage.classList.remove('revealed');
       this.els['topic'].textContent = '…';
@@ -708,17 +922,47 @@ const App = {
       if (Spin.pool().length === 0) UI.showExhaustedNote();
     });
 
+    // Reset only touches topics that were NOT chosen — chosen ones stay out of the draw.
     UI.els['reset-spun'].addEventListener('click', () => {
-      if (State.spunIds.size === 0) { UI.toast('Chưa có chủ đề nào được đánh dấu đã quay.'); return; }
-      const ok = window.confirm('Đặt lại toàn bộ dấu "đã quay"?\nMọi chủ đề sẽ có thể xuất hiện lại từ đầu.');
+      const spunActive = [...State.spunIds].filter((id) => !State.isChosen(id));
+      if (spunActive.length === 0) { UI.toast('Chưa có chủ đề nào được đánh dấu đã quay.'); return; }
+      const ok = window.confirm('Đặt lại dấu "đã quay"?\nCác chủ đề chưa được chọn sẽ quay lại từ đầu.\nChủ đề đã chọn (☑) vẫn được giữ nguyên.');
       if (!ok) return;
-      State.spunIds.clear();
+      State.spunIds = new Set([...State.spunIds].filter((id) => State.isChosen(id)));
       State.clearRotation();
       State.save();
       UI.showEmpty();
       UI.renderAll();
-      UI.toast('↺ Đã đặt lại — tất cả chủ đề sẵn sàng quay lại.');
+      UI.toast('↺ Đã đặt lại — chủ đề đã chọn vẫn được giữ.');
     });
+
+    // Tick / un-tick the topic currently on stage.
+    UI.els['choose-btn'].addEventListener('click', () => {
+      const t = Spin.current;
+      if (!t || Spin.running) return;
+      if (State.isChosen(t.id)) {
+        State.unchoose(t.id);
+        UI.toast('Đã bỏ chọn — chủ đề này có thể được quay lại.');
+      } else {
+        State.choose(t.id);
+        UI.toast('☑ Đã chuyển vào “Đã chọn” — sẽ không quay ra nữa.');
+      }
+      UI.renderAll();
+    });
+
+    UI.els['open-chosen'].addEventListener('click', () => UI.openSheet('chosen'));
+    UI.els['sheet'].addEventListener('click', (ev) => {
+      if (ev.target.closest('[data-close]')) { UI.closeSheet(); return; }
+      const tab = ev.target.closest('[data-tab]');
+      if (tab) { UI.sheetTab = tab.dataset.tab; UI.renderSheet(); return; }
+      const btn = ev.target.closest('.ti-btn[data-id]');
+      if (btn) {
+        const id = btn.dataset.id;
+        if (State.isChosen(id)) State.unchoose(id); else State.choose(id);
+        UI.renderAll();
+      }
+    });
+    UI.els['topic-search'].addEventListener('input', () => UI.renderSheet());
 
     UI.els['load-btn'].addEventListener('click', () => UI.els['file-input'].click());
     UI.els['file-input'].addEventListener('change', () => {
@@ -739,6 +983,8 @@ const App = {
 
     // Space = spin (ignored while typing in a focused control).
     document.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape' && UI.sheetOpen()) { UI.closeSheet(); return; }
+      if (UI.sheetOpen()) return;
       if (ev.code === 'Space' && !ev.repeat && ev.target === document.body) {
         ev.preventDefault();
         Spin.run();
