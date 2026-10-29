@@ -386,7 +386,7 @@ footer {
       <h3 id="pin-title">🔒 Nhập mã PIN</h3>
       <button class="icon-btn" type="button" data-pin-cancel aria-label="Đóng">✕</button>
     </div>
-    <p>Danh sách “Đã chọn” dùng chung cho cả nhóm. Nhập mã PIN một lần để máy này được tích chọn / bỏ chọn.</p>
+    <p>Ai cũng tích chọn được, nhưng <b>bỏ chọn</b> cần mã PIN để không ai lỡ tay xóa chủ đề của cả nhóm. Nhập một lần, máy này sẽ được nhớ.</p>
     <input id="pin-input" type="password" inputmode="numeric" autocomplete="off" placeholder="••••••" required>
     <p class="pin-error" id="pin-error"></p>
     <div class="pin-actions">
@@ -859,8 +859,8 @@ const UI = {
     if (!t) return;
     const on = State.isChosen(t.id);
     btn.classList.toggle('is-chosen', on);
-    const lock = Sync.enabled && !Sync.editor ? '🔒 ' : '';
-    btn.textContent = on ? `${lock}✓ Đã chọn — bấm để bỏ chọn` : `${lock}✓ Chọn chủ đề này`;
+    const lock = on && Sync.enabled && !Sync.editor ? '🔒 ' : '';
+    btn.textContent = on ? `${lock}✓ Đã chọn — bấm để bỏ chọn` : '✓ Chọn chủ đề này';
   },
 
   renderSync() {
@@ -876,7 +876,7 @@ const UI = {
     else if (Sync.ready) { text = '⚠️ Mất mạng — sẽ đồng bộ lại khi có mạng'; cls = 'is-warn'; }
     st.textContent = text;
     st.className = cls;
-    pin.textContent = Sync.editor ? '🔓 Máy này được chọn chủ đề · Khóa lại' : '🔒 Nhập mã PIN để chọn chủ đề';
+    pin.textContent = Sync.editor ? '🔓 Máy này được bỏ chọn chủ đề · Khóa lại' : '🔒 Nhập mã PIN (để bỏ chọn)';
   },
 
   /** Resolves true once this device is unlocked, false if the user cancels. */
@@ -905,7 +905,7 @@ const UI = {
         try {
           await Sync.unlock(pin);
           close(true);
-          this.toast('🔓 Đã mở khóa — máy này có thể chọn chủ đề cho cả nhóm.');
+          this.toast('🔓 Đã mở khóa — máy này có thể bỏ chọn chủ đề.');
         } catch (e) {
           btn.disabled = false;
           err.textContent = Sync.isDenied(e) ? 'Mã PIN không đúng.' : 'Không kết nối được — thử lại khi có mạng.';
@@ -1015,7 +1015,7 @@ const UI = {
     return `<li class="topic-item ${on ? 'is-chosen' : ''}">
       <div class="ti-body"><div class="ti-meta">${Utils.escapeHtml(meta)}</div>
       <div class="ti-title">${Utils.escapeHtml(t.title)}</div></div>
-      <button class="ti-btn ${on ? '' : 'primary'}" type="button" data-id="${Utils.escapeHtml(t.id)}">${Sync.enabled && !Sync.editor ? '🔒 ' : ''}${on ? 'Bỏ chọn' : '✓ Chọn'}</button>
+      <button class="ti-btn ${on ? '' : 'primary'}" type="button" data-id="${Utils.escapeHtml(t.id)}">${on && Sync.enabled && !Sync.editor ? '🔒 ' : ''}${on ? 'Bỏ chọn' : '✓ Chọn'}</button>
     </li>`;
   },
 
@@ -1087,7 +1087,7 @@ const UI = {
 
 /* ---------------- Sync (shared chosen list) ----------------
    Firebase Realtime Database layout:
-     qcd/default/chosen/{key} = { id, at }   ← public read; write only for unlocked devices
+     qcd/default/chosen/{key} = { id, at }   ← public read; anyone may ADD, only unlocked devices may remove
      editors/{uid}            = PIN          ← a device unlocks itself by writing the right PIN
      secret/pin               = PIN          ← set in the console, never readable by clients
    The server-side rules (not this code) decide who may write, so the PIN never ships in the page.
@@ -1228,14 +1228,16 @@ const App = {
       return;
     }
     if (!Sync.ready || !Sync.uid) { UI.toast('Đang kết nối danh sách chung… thử lại sau giây lát.'); return; }
-    if (!Sync.editor && !(await UI.askPin())) return;
+    if (wasOn && !Sync.editor && !(await UI.askPin())) return;   // only un-ticking needs the PIN
     if (wasOn) State.spunIds.delete(id);     // un-ticked topics come straight back into the draw
     const p = Sync.write(id, !wasOn);       // the listener updates the screen immediately
     done();
     try { await p; } catch (e) {
-      if (Sync.isDenied(e)) {
+      if (Sync.isDenied(e) && wasOn) {
         Sync.editor = false; Storage.remove('editorUid'); UI.renderAll();
-        UI.toast('🔒 Máy này chưa có quyền (mã PIN có thể đã đổi). Nhập lại mã PIN rồi thử lại.', 3600);
+        UI.toast('🔒 Máy này chưa có quyền bỏ chọn (mã PIN có thể đã đổi). Nhập lại mã PIN rồi thử lại.', 3600);
+      } else if (Sync.isDenied(e)) {
+        UI.toast('⚠️ Không lưu được lựa chọn — tải lại trang rồi thử lại.', 3200);
       } else {
         UI.toast('⚠️ Chưa lưu được — kiểm tra mạng rồi thử lại.', 3200);
       }
@@ -1279,7 +1281,7 @@ const App = {
 
     UI.els['pin-btn'].addEventListener('click', () => {
       if (Sync.editor) {
-        if (window.confirm('Khóa máy này?\nSau đó muốn chọn chủ đề phải nhập lại mã PIN.')) {
+        if (window.confirm('Khóa máy này?\nSau đó muốn bỏ chọn chủ đề phải nhập lại mã PIN.')) {
           Sync.lock().then(() => UI.toast('🔒 Đã khóa máy này.'));
         }
       } else UI.askPin();
