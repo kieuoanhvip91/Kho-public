@@ -384,6 +384,7 @@ const CONFIG = {
   storagePrefix: 'qcd.v1.',
   spinMs: 1300,          // shuffle duration (ease-out)
   defaultName: 'Bộ mặc định',
+  recentShown: 6,        // topics shown in the last N spins are never re-shown when a group has to recycle
   themeGap: 3,           // a content area may not repeat within this many previous draws (=> 4 in a row are all different)
 };
 
@@ -495,6 +496,7 @@ const State = {
   chosen: [],           // [{ id, at }] topics the user ticked — never drawn again until un-ticked.
                         // Kept for every topic set (not pruned), so switching sets loses nothing.
   chosenSet: new Set(),
+  shown: [],            // ids of the last few topics shown — never shown again right away, even when recycling
 
   load() {
     const s = Storage.get('spunIds', []);
@@ -510,6 +512,8 @@ const State = {
       .filter((x) => x && names.has(x.group))
       .map((x) => ({ group: x.group, theme: typeof x.theme === 'string' ? x.theme : '' }))
       .slice(-CONFIG.themeGap);
+    const sh = Storage.get('shown', []);
+    this.shown = (Array.isArray(sh) ? sh : []).filter((id) => typeof id === 'string').slice(-CONFIG.recentShown);
     const ch = Storage.get('chosen', []);
     this.chosen = (Array.isArray(ch) ? ch : [])
       .filter((x) => x && typeof x.id === 'string')
@@ -523,6 +527,7 @@ const State = {
     Storage.set('round', this.round);
     Storage.set('recent', this.recent);
     Storage.set('chosen', this.chosen);
+    Storage.set('shown', this.shown);
   },
   isChosen(id) { return this.chosenSet.has(id); },
   choose(id) {
@@ -563,81 +568,144 @@ const Spin = {
     return this.scopeTopics().filter((t) => !State.spunIds.has(t.id));
   },
 
-  /** Topics whose content area was not used in the last `gap` draws. */
-  themeFiltered(list, gap) {
-    if (gap <= 0) return list;
-    const banned = new Set(State.recent.slice(-gap).map((r) => r.theme).filter(Boolean));
-    return list.filter((t) => !t.theme || !banned.has(t.theme));
+  /** Chosen topics (oldest → newest) that exist in the current set — one per practice week. */
+  history() {
+    return State.chosen.map((x) => Data.byId.get(x.id)).filter(Boolean);
+  },
+
+  /** Groups that still have topics left to choose from. */
+  liveGroups() {
+    return Data.groups.map((g) => g.name).filter((g) => this.activeOfGroup(g).length);
   },
 
   /**
-   * Choose the next topic.
-   * - "Tất cả": groups take turns — every group (that still has topics) is drawn once
-   *   per round, in random order, and a new round never starts with the group just drawn.
-   * - Content spacing: avoid content areas used in the last CONFIG.themeGap draws;
-   *   the window shrinks only when nothing else is left.
+   * Group rotation, derived from what was CHOSEN (not from how many times we spun):
+   * every group gets chosen once per round; a new round never starts with the group chosen last.
+   * Returns the groups already chosen in this round and the groups allowed for the next pick.
+   */
+  roundState(groups = this.liveGroups()) {
+    const hist = this.history();
+    let round = [];
+    const full = () => groups.length > 0 && groups.every((g) => round.includes(g));
+    for (const t of hist) {
+      if (full()) round = [];
+      if (!round.includes(t.groupName)) round.push(t.groupName);
+    }
+    if (full()) {
+      const last = hist[hist.length - 1].groupName;
+      return { round: [], eligible: groups.length > 1 ? groups.filter((g) => g !== last) : groups };
+    }
+    return { round, eligible: groups.filter((g) => !round.includes(g)) };
+  },
+
+  /**
+   * Choose the next topic to show.
+   * HARD rules (vs. the topics already CHOSEN, i.e. previous weeks) — every topic that can come up
+   * satisfies them, so it does not matter whether the user picks on the 1st spin or the 4th:
+   *   1. "Tất cả": only groups not yet chosen in the current round (see roundState).
+   *   2. Content areas of the last CONFIG.themeGap chosen topics are excluded
+   *      (=> 4 chosen topics in a row are all different), with a look-ahead so the rest of the
+   *      round still has room. The window only shrinks when nothing else is left.
+   * SOFT rules (vs. recent SPINS, for variety while picking): prefer a different group and
+   * content area than the last few spins.
    */
   pick(pool) {
-    let groupPool = pool;
-    let restartedGroup = null;
+    const gap = CONFIG.themeGap;
+    const chosenThemes = this.history().map((t) => t.theme);
+    const unspun = new Set(pool.map((t) => t.id));
+    const justShown = new Set(State.shown);
+    // Everything a group may still offer: unspun first, then spun-but-not-chosen (recycled),
+    // but never a topic shown in the last few spins.
+    const sourceOf = (g) => {
+      const all = this.activeOfGroup(g);
+      const fresh = all.filter((t) => !justShown.has(t.id));
+      return fresh.length ? fresh : all;
+    };
+    let group = State.goal;
+    let allowedHard = null; // content areas allowed vs chosen topics (look-ahead, "Tất cả" mode)
+    let allowedSoft = null; // ...and also unlike the last few spins (preference only)
+
     if (!State.goal) {
-      // All groups always take part; a group that ran out simply starts its own list again.
-      // Groups whose topics were all chosen drop out of the rotation.
-      const all = Data.groups.map((g) => g.name).filter((g) => this.activeOfGroup(g).length);
-      const groupTopics = (g) => {
-        const left = pool.filter((t) => t.groupName === g);
-        return left.length ? left : this.activeOfGroup(g);
+      const { eligible } = this.roundState();
+      const spinThemes = State.recent.map((r) => r.theme);
+      // Content areas group g can offer, banning the last `gap` of BOTH lists.
+      // Soft planning looks at what the group can offer WITHOUT repeating (unspun first).
+      const unspunOf = (g) => {
+        const left = pool.filter((t) => t.groupName === g && !justShown.has(t.id));
+        return left.length ? left : sourceOf(g);
       };
-      let eligible = all.filter((g) => !State.round.includes(g));
-      if (!eligible.length) {
-        State.round = [];
-        const last = State.recent.length ? State.recent[State.recent.length - 1].group : null;
-        eligible = all.length > 1 ? all.filter((g) => g !== last) : all;
-      }
-      // Look ahead within the round: only pick (group, content area) pairs that still leave
-      // every remaining group of this round a content area outside the spacing window.
-      const gap = CONFIG.themeGap;
-      const themesOf = (g, recentThemes) => {
-        const banned = new Set(recentThemes.slice(-gap).filter(Boolean));
-        return [...new Set(groupTopics(g).map((t) => t.theme))].filter((th) => !th || !banned.has(th));
+      const themesOf = (g, hardT, softT) => {
+        const banned = new Set([...hardT.slice(-gap), ...softT.slice(-gap)].filter(Boolean));
+        const src = softT.length ? unspunOf(g) : sourceOf(g);
+        return [...new Set(src.map((t) => t.theme))].filter((th) => !th || !banned.has(th));
       };
-      const feasible = (groups, recentThemes) => !groups.length || groups.some((g) =>
-        themesOf(g, recentThemes).some((th) => feasible(groups.filter((x) => x !== g), [...recentThemes, th])));
-      const recentThemes = State.recent.map((r) => r.theme);
-      const okThemes = {};
-      for (const g of eligible) {
-        const rest = eligible.filter((x) => x !== g);
-        okThemes[g] = themesOf(g, recentThemes).filter((th) => feasible(rest, [...recentThemes, th]));
-      }
-      const safe = eligible.filter((g) => okThemes[g].length);
-      // Fallback: groups that at least honour the gap themselves, else any eligible group.
-      const roomy = eligible.filter((g) => themesOf(g, recentThemes).length);
-      const choices = safe.length ? safe : (roomy.length ? roomy : eligible);
-      const group = choices[Utils.randInt(choices.length)];
-      groupPool = pool.filter((t) => t.groupName === group);
-      if (safe.length && groupPool.length) {
-        const allowed = new Set(okThemes[group]);
-        const narrowed = groupPool.filter((t) => allowed.has(t.theme));
-        if (narrowed.length) groupPool = narrowed;
-      }
-      if (!groupPool.length) {                 // this group is used up -> restart just this group
-        const ids = new Set(Data.topics.filter((t) => t.groupName === group).map((t) => t.id));
-        State.spunIds = new Set([...State.spunIds].filter((id) => !ids.has(id)));
-        groupPool = this.activeOfGroup(group);
-        if (safe.length) {
-          const allowed = new Set(okThemes[group]);
-          const narrowed = groupPool.filter((t) => allowed.has(t.theme));
-          if (narrowed.length) groupPool = narrowed;
+      // Look-ahead: can the remaining groups of the round each still get a free content area?
+      const feasible = (groups, hardT, softT, soft) => !groups.length || groups.some((g) =>
+        themesOf(g, hardT, softT).some((th) => feasible(groups.filter((x) => x !== g),
+          soft ? hardT : [...hardT, th], soft ? [...softT, th] : softT, soft)));
+      const lookahead = (groups, soft) => {
+        const ok = {};
+        for (const g of groups) {
+          const rest = groups.filter((x) => x !== g);
+          ok[g] = themesOf(g, chosenThemes, soft ? spinThemes : [])
+            .filter((th) => feasible(rest, soft ? chosenThemes : [...chosenThemes, th], soft ? [...spinThemes, th] : [], soft));
         }
-        restartedGroup = group;
-      }
+        return ok;
+      };
+      // HARD: rotation + content spacing vs the CHOSEN topics (previous weeks).
+      const okHard = lookahead(eligible, false);
+      const safe = eligible.filter((g) => okHard[g].length);
+      const roomy = eligible.filter((g) => themesOf(g, chosenThemes, []).length);
+      const base = safe.length ? safe : (roomy.length ? roomy : eligible);
+
+      // SOFT: variety between spins — a spin round over the allowed groups (never the group just
+      // shown) and content areas unlike the last few spins, still honouring the hard rules.
+      if (base.every((g) => State.round.includes(g))) State.round = [];
+      const lastSpun = State.recent.length ? State.recent[State.recent.length - 1].group : null;
+      let spinGroups = base.filter((g) => !State.round.includes(g) && g !== lastSpun);
+      if (!spinGroups.length) spinGroups = base.filter((g) => g !== lastSpun);
+      if (!spinGroups.length) spinGroups = base;
+      const okSoft = lookahead(spinGroups, true);
+      const softOk = (g) => okSoft[g].filter((th) => !safe.length || okHard[g].includes(th));
+      const best = spinGroups.filter((g) => softOk(g).length);
+
+      group = best.length ? best[Utils.randInt(best.length)] : spinGroups[Utils.randInt(spinGroups.length)];
+      if (safe.length) allowedHard = new Set(okHard[group]);
+      if (best.length) allowedSoft = new Set(softOk(group));
     }
-    let candidates = groupPool;
-    for (let gap = CONFIG.themeGap; gap >= 0; gap--) {
-      const c = this.themeFiltered(groupPool, gap);
+
+    const source = sourceOf(group);
+    // Hard content-area rule vs chosen topics; the window shrinks only if nothing is left.
+    let ruled = [];
+    if (allowedHard) ruled = source.filter((t) => allowedHard.has(t.theme));
+    for (let g = gap; !ruled.length && g >= 0; g--) {
+      const banned = new Set(g > 0 ? chosenThemes.slice(-g).filter(Boolean) : []);
+      ruled = source.filter((t) => !t.theme || !banned.has(t.theme));
+    }
+    // Prefer topics not spun yet; recycle spun ones only when the group has none left.
+    // (variety between spins never forces a repeat: it only narrows within the same tier)
+    const fresh = ruled.filter((t) => unspun.has(t.id));
+    let candidates = fresh.length ? fresh : ruled;
+    const recycled = !fresh.length;
+    if (allowedSoft) {
+      const c = candidates.filter((t) => allowedSoft.has(t.theme));
+      if (c.length) candidates = c;
+    }
+    // Soft: avoid content areas of the last few spins.
+    for (let g = gap; g > 0; g--) {
+      const banned = new Set(State.recent.slice(-g).map((r) => r.theme).filter(Boolean));
+      const c = candidates.filter((t) => !t.theme || !banned.has(t.theme));
       if (c.length) { candidates = c; break; }
     }
-    return { chosen: candidates[Utils.randInt(candidates.length)], candidates, restartedGroup };
+    const chosen = candidates[Utils.randInt(candidates.length)];
+    // Recycling a group = starting its no-repeat list again (keep only what was just shown).
+    let restartedGroup = null;
+    if (recycled && !State.goal && pool.every((t) => t.groupName !== group)) {
+      const ids = new Set(Data.topics.filter((t) => t.groupName === group && !justShown.has(t.id)).map((t) => t.id));
+      State.spunIds = new Set([...State.spunIds].filter((id) => !ids.has(id)));
+      restartedGroup = group;
+    }
+    return { chosen, candidates, restartedGroup };
   },
 
   /** Reset the no-repeat marks of the CURRENT scope only (other goals keep their progress). */
@@ -664,10 +732,13 @@ const Spin = {
 
     const { chosen, candidates, restartedGroup } = this.pick(pool);
     if (restartedGroup) restarted = restartedGroup;
+    // Only happens when the group whose turn it is has almost nothing left to offer.
+    const repeated = State.shown.includes(chosen.id);
     State.spunIds.add(chosen.id);
     if (!State.goal) State.round.push(chosen.groupName);
     State.recent.push({ group: chosen.groupName, theme: chosen.theme });
     State.recent = State.recent.slice(-CONFIG.themeGap);
+    State.shown = [...State.shown.filter((id) => id !== chosen.id), chosen.id].slice(-CONFIG.recentShown);
     this.current = chosen;
     State.save();
 
@@ -680,6 +751,10 @@ const Spin = {
     this.running = false;
 
     UI.reveal(chosen, { restarted });
+    if (repeated) {
+      const n = this.activeOfGroup(chosen.groupName).length;
+      UI.toast(`Nhóm “${chosen.groupName}” chỉ còn ${n} chủ đề chưa chọn — hãy chọn một trong số này.`, 3200);
+    }
     UI.renderAll();
   },
 
@@ -748,16 +823,16 @@ const UI = {
       </button>`).join('');
   },
 
-  /** "Tất cả" mode: show which groups have had their turn in the current round. */
+  /** "Tất cả" mode: rotation of CHOSEN topics — which groups were chosen this round, which are next. */
   renderRound() {
     const el = this.els['round'];
     if (State.goal) { el.textContent = ''; return; }
     const short = (n) => { const m = n.match(/\(([^)]+)\)/); return m ? m[1] : n; };
-    const left = new Set(Spin.pool().map((t) => t.groupName));
-    const parts = Data.groups
-      .filter((g) => left.has(g.name) || State.round.includes(g.name))
-      .map((g) => (State.round.includes(g.name) ? '✓ ' : '') + short(g.name));
-    el.textContent = State.round.length ? 'Vòng này: ' + parts.join(' · ') : 'Luân phiên: ' + parts.join(' → ');
+    const groups = Spin.liveGroups();
+    const { round, eligible } = Spin.roundState(groups);
+    el.textContent = round.length
+      ? 'Vòng chọn: ' + groups.map((g) => (round.includes(g) ? '✓ ' : '') + short(g)).join(' · ')
+      : 'Lượt chọn tới: ' + eligible.map(short).join(' · ');
   },
 
   renderCounter() {
