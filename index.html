@@ -132,6 +132,27 @@ header {
 .list-empty { color: var(--muted); font-size: 0.9rem; text-align: center; padding: 22px 8px; }
 body.sheet-open { overflow: hidden; }
 
+/* ---------- Sync status + PIN dialog ---------- */
+#sync-status { color: var(--muted); font-size: 0.8rem; }
+#sync-status.is-ok { color: #8fbf7a; }
+#sync-status.is-warn { color: var(--accent); }
+.pin-panel { width: min(380px, 100%); }
+.pin-panel p { margin: 0; color: var(--muted); font-size: 0.88rem; line-height: 1.5; }
+#pin-input {
+  font: inherit; font-size: 1.15rem; letter-spacing: 0.2em; text-align: center; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-btn);
+  padding: 11px 14px; width: 100%; outline: none;
+}
+#pin-input:focus { border-color: var(--accent); }
+.pin-error { color: #e07a5f !important; min-height: 1.2em; }
+.pin-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.pin-actions button {
+  font: inherit; font-size: 0.9rem; font-weight: 600; border-radius: var(--radius-btn);
+  padding: 9px 16px; cursor: pointer; border: 1px solid var(--border); background: none; color: var(--text);
+}
+.pin-actions .primary { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
+.pin-actions button:disabled { opacity: 0.6; cursor: wait; }
+
 /* ---------- Main ---------- */
 main {
   flex: 1;
@@ -297,6 +318,8 @@ footer {
   .brand { font-size: 0.85rem; }
   #reset-spun, #open-chosen { padding: 7px 9px; font-size: 0.74rem; }
   .sheet { padding: 0; align-items: flex-end; }
+  .pin-dialog { align-items: center; padding: 16px; }
+  .pin-dialog .sheet-panel { border-radius: var(--radius); }
   .sheet-panel { max-height: 92dvh; border-radius: var(--radius) var(--radius) 0 0; padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); }
   .topic-item { flex-wrap: wrap; }
   .ti-btn { margin-left: auto; }
@@ -348,11 +371,30 @@ footer {
 </main>
 
 <footer>
+  <span id="sync-status" hidden></span>
+  <button class="linkish hidden" id="pin-btn" type="button"></button>
   <span id="data-name"></span>
   <button class="linkish" id="load-btn" type="button">📂 Nạp bộ chủ đề khác (JSON)</button>
   <button class="linkish hidden" id="default-btn" type="button">↩︎ Về bộ mặc định</button>
   <input id="file-input" type="file" accept=".json,application/json" hidden>
 </footer>
+
+<div class="sheet pin-dialog" id="pin-dialog" hidden>
+  <div class="sheet-backdrop" data-pin-cancel></div>
+  <form class="sheet-panel pin-panel" id="pin-form" role="dialog" aria-modal="true" aria-labelledby="pin-title" autocomplete="off">
+    <div class="sheet-head">
+      <h3 id="pin-title">🔒 Nhập mã PIN</h3>
+      <button class="icon-btn" type="button" data-pin-cancel aria-label="Đóng">✕</button>
+    </div>
+    <p>Danh sách “Đã chọn” dùng chung cho cả nhóm. Nhập mã PIN một lần để máy này được tích chọn / bỏ chọn.</p>
+    <input id="pin-input" type="password" inputmode="numeric" autocomplete="off" placeholder="••••••" required>
+    <p class="pin-error" id="pin-error"></p>
+    <div class="pin-actions">
+      <button type="button" data-pin-cancel>Hủy</button>
+      <button type="submit" class="primary" id="pin-submit">Mở khóa</button>
+    </div>
+  </form>
+</div>
 
 <div class="sheet" id="sheet" hidden>
   <div class="sheet-backdrop" data-close></div>
@@ -386,6 +428,22 @@ const CONFIG = {
   defaultName: 'Bộ mặc định',
   recentShown: 6,        // topics shown in the last N spins are never re-shown when a group has to recycle
   themeGap: 3,           // a content area may not repeat within this many previous draws (=> 4 in a row are all different)
+};
+
+/* Shared "Đã chọn" list (Firebase Realtime Database). Leave `firebase: null` to keep everything per device.
+   Paste the web-app config from Firebase console → Project settings → Your apps. */
+const SYNC_CONFIG = {
+  firebase: {
+    apiKey: 'AIzaSyCZxVXtHXKQ2RPb7Ytj3NdML-5lcn0EB4o',
+    authDomain: 'quay-chu-de.firebaseapp.com',
+    databaseURL: 'https://quay-chu-de-default-rtdb.asia-southeast1.firebasedatabase.app',
+    projectId: 'quay-chu-de',
+    storageBucket: 'quay-chu-de.firebasestorage.app',
+    messagingSenderId: '29245277090',
+    appId: '1:29245277090:web:03bbcdfc4c36b71fe4e8fb',
+  },
+  sdk: 'https://www.gstatic.com/firebasejs/10.12.2/',
+  path: 'qcd/default',   // where the default set's chosen list lives
 };
 
 /* ---------------- Utils ---------------- */
@@ -780,7 +838,8 @@ const UI = {
   cache() {
     ['goals', 'stage', 'stage-label', 'topic', 'done-note',
      'spin-btn', 'counter', 'round', 'reset-spun', 'load-btn', 'default-btn', 'file-input', 'data-name',
-     'choose-btn', 'open-chosen', 'chosen-badge', 'sheet', 'topic-search', 'topic-list', 'chosen-count']
+     'choose-btn', 'open-chosen', 'chosen-badge', 'sheet', 'topic-search', 'topic-list', 'chosen-count',
+     'sync-status', 'pin-btn', 'pin-dialog', 'pin-form', 'pin-input', 'pin-error', 'pin-submit']
       .forEach((id) => { this.els[id] = document.getElementById(id); });
   },
 
@@ -800,8 +859,62 @@ const UI = {
     if (!t) return;
     const on = State.isChosen(t.id);
     btn.classList.toggle('is-chosen', on);
-    btn.textContent = on ? '✓ Đã chọn — bấm để bỏ chọn' : '✓ Chọn chủ đề này';
+    const lock = Sync.enabled && !Sync.editor ? '🔒 ' : '';
+    btn.textContent = on ? `${lock}✓ Đã chọn — bấm để bỏ chọn` : `${lock}✓ Chọn chủ đề này`;
   },
+
+  renderSync() {
+    const st = this.els['sync-status'], pin = this.els['pin-btn'];
+    if (!st) return;
+    const on = Sync.enabled || Sync.failed;
+    st.hidden = !on;
+    pin.classList.toggle('hidden', !Sync.enabled || !Sync.uid);
+    if (!on) return;
+    let text = '☁️ Đang kết nối danh sách chung…', cls = '';
+    if (Sync.failed) { text = '⚠️ Chưa kết nối được danh sách chung'; cls = 'is-warn'; }
+    else if (Sync.ready && Sync.online) { text = '☁️ Đã đồng bộ với cả nhóm'; cls = 'is-ok'; }
+    else if (Sync.ready) { text = '⚠️ Mất mạng — sẽ đồng bộ lại khi có mạng'; cls = 'is-warn'; }
+    st.textContent = text;
+    st.className = cls;
+    pin.textContent = Sync.editor ? '🔓 Máy này được chọn chủ đề · Khóa lại' : '🔒 Nhập mã PIN để chọn chủ đề';
+  },
+
+  /** Resolves true once this device is unlocked, false if the user cancels. */
+  askPin() {
+    return new Promise((resolve) => {
+      const dlg = this.els['pin-dialog'], input = this.els['pin-input'], err = this.els['pin-error'], btn = this.els['pin-submit'];
+      input.value = ''; err.textContent = ''; btn.disabled = false;
+      dlg.hidden = false;
+      document.body.classList.add('sheet-open');
+      setTimeout(() => input.focus(), 30);
+      const close = (ok) => {
+        dlg.hidden = true;
+        if (!this.sheetOpen()) document.body.classList.remove('sheet-open');
+        this.els['pin-form'].onsubmit = null;
+        dlg.onclick = null;
+        this.pinClose = null;
+        resolve(ok);
+      };
+      this.pinClose = () => close(false);
+      dlg.onclick = (ev) => { if (ev.target.closest('[data-pin-cancel]')) close(false); };
+      this.els['pin-form'].onsubmit = async (ev) => {
+        ev.preventDefault();
+        const pin = input.value.trim();
+        if (!pin) return;
+        btn.disabled = true; err.textContent = '';
+        try {
+          await Sync.unlock(pin);
+          close(true);
+          this.toast('🔓 Đã mở khóa — máy này có thể chọn chủ đề cho cả nhóm.');
+        } catch (e) {
+          btn.disabled = false;
+          err.textContent = Sync.isDenied(e) ? 'Mã PIN không đúng.' : 'Không kết nối được — thử lại khi có mạng.';
+          input.select();
+        }
+      };
+    });
+  },
+  pinOpen() { return !this.els['pin-dialog'].hidden; },
 
   renderGoals() {
     const active = Spin.activeTopics();
@@ -902,11 +1015,12 @@ const UI = {
     return `<li class="topic-item ${on ? 'is-chosen' : ''}">
       <div class="ti-body"><div class="ti-meta">${Utils.escapeHtml(meta)}</div>
       <div class="ti-title">${Utils.escapeHtml(t.title)}</div></div>
-      <button class="ti-btn ${on ? '' : 'primary'}" type="button" data-id="${Utils.escapeHtml(t.id)}">${on ? 'Bỏ chọn' : '✓ Chọn'}</button>
+      <button class="ti-btn ${on ? '' : 'primary'}" type="button" data-id="${Utils.escapeHtml(t.id)}">${Sync.enabled && !Sync.editor ? '🔒 ' : ''}${on ? 'Bỏ chọn' : '✓ Chọn'}</button>
     </li>`;
   },
 
   renderAll() {
+    this.renderSync();
     this.renderChosenBadge();
     this.renderChooseBtn();
     this.renderSheet();
@@ -971,6 +1085,124 @@ const UI = {
   },
 };
 
+/* ---------------- Sync (shared chosen list) ----------------
+   Firebase Realtime Database layout:
+     qcd/default/chosen/{key} = { id, at }   ← public read; write only for unlocked devices
+     editors/{uid}            = PIN          ← a device unlocks itself by writing the right PIN
+     secret/pin               = PIN          ← set in the console, never readable by clients
+   The server-side rules (not this code) decide who may write, so the PIN never ships in the page.
+   Each browser signs in anonymously; its uid stays the same, so the PIN is entered once per device. */
+const Sync = {
+  enabled: false,   // a config is present and the default set is in use
+  ready: false,     // first snapshot received
+  online: false,
+  failed: false,
+  uid: null,
+  editor: false,
+  fb: null,         // { db, ref, set, remove, onValue, off }
+  unsub: [],
+
+  /** Firebase keys can't contain . # $ [ ] / — hash the topic id (53-bit, collision-safe enough here). */
+  key(id) {
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (let i = 0; i < id.length; i++) {
+      const c = id.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return 'k' + (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+  },
+
+  async start() {
+    if (!SYNC_CONFIG.firebase || Data.usingCustom() || this.enabled) { UI.renderSync(); return; }
+    this.enabled = true; this.failed = false; this.ready = false;
+    UI.renderSync();
+    try {
+      if (!this.fb) {
+        const base = SYNC_CONFIG.sdk;
+        const [appM, authM, dbM] = await Promise.all([
+          import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-database.js'),
+        ]);
+        const app = appM.initializeApp(SYNC_CONFIG.firebase);
+        const auth = authM.getAuth(app);
+        const db = dbM.getDatabase(app);
+        if (SYNC_CONFIG.emulator) {   // local testing only
+          dbM.connectDatabaseEmulator(db, SYNC_CONFIG.emulator.host, SYNC_CONFIG.emulator.db);
+          authM.connectAuthEmulator(auth, `http://${SYNC_CONFIG.emulator.host}:${SYNC_CONFIG.emulator.auth}`, { disableWarnings: true });
+        }
+        this.fb = { db, auth, authM, ...dbM };
+      }
+      const { db, ref, onValue } = this.fb;
+      this.unsub.push(onValue(ref(db, '.info/connected'), (s) => { this.online = !!s.val(); UI.renderSync(); }));
+      this.unsub.push(onValue(ref(db, SYNC_CONFIG.path + '/chosen'),
+        (snap) => this.applyRemote(snap.val()),
+        () => this.fail()));
+      const cred = await this.fb.authM.signInAnonymously(this.fb.auth);
+      this.uid = cred.user.uid;
+      this.editor = Storage.get('editorUid', null) === this.uid;
+      UI.renderAll();
+    } catch (_) { this.fail(); }
+  },
+
+  stop() {
+    this.unsub.forEach((u) => { try { u(); } catch (_) {} });
+    this.unsub = [];
+    this.enabled = false; this.ready = false;
+    UI.renderSync();
+  },
+
+  fail() {
+    this.stop();
+    this.failed = true;
+    UI.renderAll();
+    UI.toast('⚠️ Không kết nối được danh sách chung — đang dùng danh sách trên máy này.', 3600);
+  },
+
+  /** The shared list replaces the local one (and is cached locally for offline viewing). */
+  applyRemote(val) {
+    const list = Object.values(val || {})
+      .filter((x) => x && typeof x.id === 'string')
+      .map((x) => ({ id: x.id, at: Number(x.at) || 0 }))
+      .sort((a, b) => a.at - b.at);
+    State.chosen = list;
+    State.chosenSet = new Set(list.map((x) => x.id));
+    State.save();
+    this.ready = true;
+    UI.renderAll();
+  },
+
+  /** PINs typed as digits are stored as numbers by the console, so send the same type. */
+  pinValue(pin) {
+    return /^[1-9][0-9]{0,14}$/.test(pin) ? Number(pin) : pin;
+  },
+
+  async unlock(pin) {
+    const { db, ref, set } = this.fb;
+    await set(ref(db, 'editors/' + this.uid), this.pinValue(pin));  // rejected by the rules if wrong
+    this.editor = true;
+    Storage.set('editorUid', this.uid);
+    UI.renderAll();
+  },
+
+  async lock() {
+    const { db, ref, remove } = this.fb;
+    try { await remove(ref(db, 'editors/' + this.uid)); } catch (_) {}
+    this.editor = false;
+    Storage.remove('editorUid');
+    UI.renderAll();
+  },
+
+  /** Writes are applied to the local listener at once (latency compensation) and rolled back if refused. */
+  write(id, on) {
+    const { db, ref, set, remove } = this.fb;
+    const r = ref(db, `${SYNC_CONFIG.path}/chosen/${this.key(id)}`);
+    return on ? set(r, { id, at: Date.now() }) : remove(r);
+  },
+
+  isDenied(e) { return e && /permission/i.test(String(e.code || e.message || e)); },
+};
+
 /* ---------------- App ---------------- */
 const App = {
   init() {
@@ -981,6 +1213,33 @@ const App = {
     UI.renderAll();
     if (Spin.pool().length === 0) UI.showExhaustedNote();
     this.wire();
+    Sync.start();
+  },
+
+  /** Tick / un-tick a topic — locally, or on the shared list when sync is on. */
+  async toggleChosen(id) {
+    const wasOn = State.isChosen(id);
+    const done = () => UI.toast(wasOn
+      ? 'Đã bỏ chọn — chủ đề này có thể được quay lại.'
+      : '☑ Đã chuyển vào “Đã chọn” — sẽ không quay ra nữa.');
+    if (!Sync.enabled) {
+      if (wasOn) State.unchoose(id); else State.choose(id);
+      UI.renderAll(); done();
+      return;
+    }
+    if (!Sync.ready || !Sync.uid) { UI.toast('Đang kết nối danh sách chung… thử lại sau giây lát.'); return; }
+    if (!Sync.editor && !(await UI.askPin())) return;
+    if (wasOn) State.spunIds.delete(id);     // un-ticked topics come straight back into the draw
+    const p = Sync.write(id, !wasOn);       // the listener updates the screen immediately
+    done();
+    try { await p; } catch (e) {
+      if (Sync.isDenied(e)) {
+        Sync.editor = false; Storage.remove('editorUid'); UI.renderAll();
+        UI.toast('🔒 Máy này chưa có quyền (mã PIN có thể đã đổi). Nhập lại mã PIN rồi thử lại.', 3600);
+      } else {
+        UI.toast('⚠️ Chưa lưu được — kiểm tra mạng rồi thử lại.', 3200);
+      }
+    }
   },
 
   wire() {
@@ -1015,14 +1274,15 @@ const App = {
     UI.els['choose-btn'].addEventListener('click', () => {
       const t = Spin.current;
       if (!t || Spin.running) return;
-      if (State.isChosen(t.id)) {
-        State.unchoose(t.id);
-        UI.toast('Đã bỏ chọn — chủ đề này có thể được quay lại.');
-      } else {
-        State.choose(t.id);
-        UI.toast('☑ Đã chuyển vào “Đã chọn” — sẽ không quay ra nữa.');
-      }
-      UI.renderAll();
+      this.toggleChosen(t.id);
+    });
+
+    UI.els['pin-btn'].addEventListener('click', () => {
+      if (Sync.editor) {
+        if (window.confirm('Khóa máy này?\nSau đó muốn chọn chủ đề phải nhập lại mã PIN.')) {
+          Sync.lock().then(() => UI.toast('🔒 Đã khóa máy này.'));
+        }
+      } else UI.askPin();
     });
 
     UI.els['open-chosen'].addEventListener('click', () => UI.openSheet('chosen'));
@@ -1031,11 +1291,7 @@ const App = {
       const tab = ev.target.closest('[data-tab]');
       if (tab) { UI.sheetTab = tab.dataset.tab; UI.renderSheet(); return; }
       const btn = ev.target.closest('.ti-btn[data-id]');
-      if (btn) {
-        const id = btn.dataset.id;
-        if (State.isChosen(id)) State.unchoose(id); else State.choose(id);
-        UI.renderAll();
-      }
+      if (btn) this.toggleChosen(btn.dataset.id);
     });
     UI.els['topic-search'].addEventListener('input', () => UI.renderSheet());
 
@@ -1054,12 +1310,14 @@ const App = {
       UI.renderAll();
       if (Spin.pool().length === 0) UI.showExhaustedNote();
       UI.toast('↩︎ Đã quay về bộ chủ đề mặc định.');
+      Sync.start();
     });
 
     // Space = spin (ignored while typing in a focused control).
     document.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape' && UI.pinOpen()) { if (UI.pinClose) UI.pinClose(); return; }
       if (ev.key === 'Escape' && UI.sheetOpen()) { UI.closeSheet(); return; }
-      if (UI.sheetOpen()) return;
+      if (UI.sheetOpen() || UI.pinOpen()) return;
       if (ev.code === 'Space' && !ev.repeat && ev.target === document.body) {
         ev.preventDefault();
         Spin.run();
@@ -1074,6 +1332,7 @@ const App = {
       const groups = Data.normalize(raw); // throws with a friendly message on bad shape
       Data.apply(groups, file.name.replace(/\.json$/i, ''));
       Storage.set('customData', { name: Data.sourceName, raw });
+      Sync.stop();  // custom sets keep their chosen list on this device only
       State.load(); // prune spun ids + goal against the new set; surviving progress is kept
       UI.showEmpty();
       UI.renderAll();
@@ -1087,7 +1346,7 @@ const App = {
 };
 
 /* Internal debug/test handle (not a public API). */
-window.__QCD__ = { CONFIG, Utils, Storage, Data, State, Spin, UI, App };
+window.__QCD__ = { CONFIG, SYNC_CONFIG, Utils, Storage, Data, State, Spin, UI, App, Sync };
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => App.init());
